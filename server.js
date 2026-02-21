@@ -1,105 +1,75 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+require('dotenv').config();
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const fileRoutes = require('./routes/files');
-const accountRoutes = require('./routes/accounts');
-const documentRoutes = require('./routes/documents');
-
-// Initialize app
 const app = express();
 
-/* =========================
-   Middleware
-========================= */
-
-// Body parsers
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS (allow only frontend URL)
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; // set this in Render
+// CORS
 app.use(cors({
-    origin: FRONTEND_URL,
-    optionsSuccessStatus: 200
+    origin: '*',
+    credentials: true
 }));
 
-// Static folder for uploads
-app.use('/uploads', express.static('uploads'));
-
-/* =========================
-   Routes
-========================= */
-
-// Base API route
-app.get('/api', (req, res) => {
-    res.json({
-        message: 'MCLP API is running ✅',
-        endpoints: [
-            '/api/auth',
-            '/api/files',
-            '/api/accounts',
-            '/api/documents',
-            '/api/health'
-        ]
-    });
-});
-
-// Route handlers
-app.use('/api/auth', authRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/documents', documentRoutes);
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/files', require('./routes/files'));
+app.use('/api/accounts', require('./routes/accounts'));
+app.use('/api/documents', require('./routes/documents'));
 
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
         message: 'MCLP Backend is running',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        env: {
+            nodeEnv: process.env.NODE_ENV,
+            hasMongoUri: !!process.env.MONGODB_URI,
+            hasJwtSecret: !!process.env.JWT_SECRET
+        }
     });
 });
 
-/* =========================
-   Error Handling
-========================= */
-
+// Error handler
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error('Error:', err.message);
     res.status(err.status || 500).json({
         success: false,
         message: err.message || 'Internal Server Error'
     });
 });
 
-/* =========================
-   MongoDB Connection + Server Start
-========================= */
-
-const MONGODB_URI = process.env.MONGODB_URI; // set in Render
+// Get MongoDB URI from environment
+const MONGODB_URI = process.env.MONGODB_URI;
 const PORT = process.env.PORT || 5000;
 
+// Validate environment variables
+if (!MONGODB_URI) {
+    console.error('❌ MONGODB_URI environment variable is not set');
+    console.error('Please set it in your deployment platform (Render)');
+    process.exit(1);
+}
+
+// MongoDB Connection
+console.log('🔄 Connecting to MongoDB...');
 mongoose.connect(MONGODB_URI)
     .then(() => {
         console.log('✅ MongoDB Connected Successfully');
+        
+        // Start server
         app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
+            console.log(`🚀 MCLP Backend Server running on port ${PORT}`);
+            console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🌐 Health check: /api/health`);
         });
     })
-    .catch((error) => {
-        console.error('❌ MongoDB Connection Error:', error.message);
+    .catch((err) => {
+        console.error('❌ MongoDB Connection Error:', err.message);
+        console.error('Connection string starts with:', MONGODB_URI?.substring(0, 20) + '...');
         process.exit(1);
     });
-
-/* =========================
-   Handle Unhandled Rejections
-========================= */
-
-process.on('unhandledRejection', (err) => {
-    console.error('❌ Unhandled Rejection:', err.message);
-    process.exit(1);
-});
-
-module.exports = app;
