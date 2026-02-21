@@ -1,7 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -16,14 +15,18 @@ const app = express();
    Middleware
 ========================= */
 
-// Body parsers (ONLY ONCE)
+// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS (Production Safe)
-app.use(cors());
+// CORS (allow only frontend URL)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'; // set this in Render
+app.use(cors({
+    origin: FRONTEND_URL,
+    optionsSuccessStatus: 200
+}));
 
-// Static folder
+// Static folder for uploads
 app.use('/uploads', express.static('uploads'));
 
 /* =========================
@@ -75,20 +78,20 @@ app.use((err, req, res, next) => {
    MongoDB Connection + Server Start
 ========================= */
 
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => {
-    console.log('✅ MongoDB Connected Successfully');
+const MONGODB_URI = process.env.MONGODB_URI; // set in Render
+const PORT = process.env.PORT || 5000;
 
-    const PORT = process.env.PORT || 5000;
-
-    app.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
+mongoose.connect(MONGODB_URI)
+    .then(() => {
+        console.log('✅ MongoDB Connected Successfully');
+        app.listen(PORT, () => {
+            console.log(`🚀 Server running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error('❌ MongoDB Connection Error:', error.message);
+        process.exit(1);
     });
-})
-.catch((error) => {
-    console.error('❌ MongoDB Connection Error:', error.message);
-    process.exit(1);
-});
 
 /* =========================
    Handle Unhandled Rejections
